@@ -1378,19 +1378,8 @@ void nwm::handle_map_request(XMapRequestEvent *e, Base &base)
 
     auto &current_ws = get_current_workspace(base);
 
-    if (!current_ws.windows.empty()) {
+    if (!current_ws.windows.empty() && current_ws.windows.back().window == e->window) {
         ManagedWindow *new_window = &current_ws.windows.back();
-
-        if (base.anim_manager && base.anim_manager->animations_enabled &&
-                base.anim_manager->window_open_enabled) {
-            animate_window_open(base, new_window->window);
-        }
-
-        bool had_floating_focus = (base.focused_window && (base.focused_window->is_floating || base.focused_window->is_fullscreen));
-
-        if (!had_floating_focus) {
-            focus_window(new_window, base);
-        }
 
         if (!new_window->is_floating && !new_window->is_fullscreen) {
             if (base.horizontal_mode) {
@@ -1420,6 +1409,20 @@ void nwm::handle_map_request(XMapRequestEvent *e, Base &base)
             }
         } else {
             XRaiseWindow(base.display, new_window->window);
+        }
+
+        if (base.anim_manager && base.anim_manager->animations_enabled &&
+                base.anim_manager->window_open_enabled) {
+            animate_window_open(base, new_window->window);
+        }
+
+        // Map window after tiling and animation setup to avoid flash at (0,0)
+        XMapWindow(base.display, e->window);
+
+        bool had_floating_focus = (base.focused_window && (base.focused_window->is_floating || base.focused_window->is_fullscreen));
+
+        if (!had_floating_focus) {
+            focus_window(new_window, base);
         }
     }
     update_struts(base);
@@ -2726,7 +2729,6 @@ void nwm::manage_window(Window window, Base &base)
     }
 
     if (target_workspace == (int)base.current_workspace) {
-        XMapWindow(base.display, window);
         if (is_float || saved_fullscreen) {
             XRaiseWindow(base.display, window);
         }

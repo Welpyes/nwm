@@ -712,6 +712,7 @@ void nwm::animate_window_open(Base &base, Window window) {
             break;
     }
 
+    anim->update(base, 0.0f);
     base.anim_manager->animations.push_back(anim);
 }
 
