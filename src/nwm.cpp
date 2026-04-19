@@ -2088,31 +2088,53 @@ void nwm::titlebar_init(ManagedWindow* window, Base &base)
 
     window->title = get_window_title(base.display, window->window);
 
-    window->titlebar.xft_draw = XftDrawCreate(
-                                    base.display, window->window,
-                                    DefaultVisual(base.display, base.screen),
-                                    DefaultColormap(base.display, base.screen)
-                                );
-
-    if (!window->titlebar.xft_draw) {
-        return;
-    }
-
     window->titlebar.x = 0;
     window->titlebar.y = 0;
     window->titlebar.width = window->width;
     window->titlebar.height = base.titlebar_height;
     window->titlebar.needs_redraw = true;
-    window->titlebar.window = window->window;
+
+    XSetWindowAttributes wa;
+    wa.background_pixel = window->is_focused ? base.titlebar_focus_bg.pixel : base.titlebar_bg.pixel;
+    wa.event_mask = ExposureMask | ButtonPressMask;
+    wa.override_redirect = True;
+
+    window->titlebar.window = XCreateWindow(
+                                  base.display, base.root,
+                                  window->x, window->y - base.titlebar_height,
+                                  window->width, base.titlebar_height,
+                                  0, DefaultDepth(base.display, base.screen), InputOutput,
+                                  DefaultVisual(base.display, base.screen),
+                                  CWBackPixel | CWEventMask | CWOverrideRedirect, &wa
+                              );
+
+    if (window->titlebar.window == 0) {
+        return;
+    }
+
+    window->titlebar.xft_draw = XftDrawCreate(
+                                    base.display, window->titlebar.window,
+                                    DefaultVisual(base.display, base.screen),
+                                    DefaultColormap(base.display, base.screen)
+                                );
+
+    if (!window->titlebar.xft_draw) {
+        XDestroyWindow(base.display, window->titlebar.window);
+        window->titlebar.window = 0;
+        return;
+    }
 
     window->has_titlebar = true;
+
+    if (window->workspace == (int)base.current_workspace) {
+        XMapWindow(base.display, window->titlebar.window);
+    }
 
     titlebar_draw(window, base);
 }
 
 void nwm::titlebar_cleanup(ManagedWindow* window, Base &base)
 {
-    (void)base;
     if (!window->has_titlebar) return;
 
     if (window->titlebar.xft_draw) {
@@ -2120,29 +2142,35 @@ void nwm::titlebar_cleanup(ManagedWindow* window, Base &base)
         window->titlebar.xft_draw = nullptr;
     }
 
-    window->titlebar.window = 0;
+    if (window->titlebar.window != 0) {
+        XDestroyWindow(base.display, window->titlebar.window);
+        window->titlebar.window = 0;
+    }
+
     window->has_titlebar = false;
 }
 
 void nwm::titlebar_draw(ManagedWindow* window, Base &base)
 {
-    if (!window->has_titlebar || !window->titlebar.xft_draw) {
+    if (!window->has_titlebar || !window->titlebar.xft_draw || window->titlebar.window == 0) {
         return;
     }
 
-    GC gc = XCreateGC(base.display, window->window, 0, nullptr);
+    GC gc = XCreateGC(base.display, window->titlebar.window, 0, nullptr);
     if (!gc) {
         return;
     }
 
-    unsigned long bg_color = window->is_focused ? TITLE_BAR_FOCUS_BG : TITLE_BAR_BG;
+    unsigned long bg_pixel = window->is_focused ? base.titlebar_focus_bg.pixel : base.titlebar_bg.pixel;
     XftColor* text_color = window->is_focused ? &base.titlebar_focus_fg : &base.titlebar_fg;
 
-    XSetForeground(base.display, gc, bg_color);
+    XSetWindowBackground(base.display, window->titlebar.window, bg_pixel);
+
+    XSetForeground(base.display, gc, bg_pixel);
     XSetFunction(base.display, gc, GXcopy);
 
-    XFillRectangle(base.display, window->window, gc,
-                   0, 0, window->width, base.titlebar_height);
+    XFillRectangle(base.display, window->titlebar.window, gc,
+                   0, 0, window->titlebar.width, base.titlebar_height);
 
     if (!window->title.empty() && base.xft_font) {
         int text_x = 5;
@@ -2154,7 +2182,7 @@ void nwm::titlebar_draw(ManagedWindow* window, Base &base)
                            (XftChar8*)display_title.c_str(), display_title.length(),
                            &extents);
 
-        while (extents.width > (window->width - 10) && display_title.length() > 3) {
+        while (extents.width > (window->titlebar.width - 10) && display_title.length() > 3) {
             display_title = display_title.substr(0, display_title.length() - 4) + "...";
             XftTextExtentsUtf8(base.display, base.xft_font,
                                (XftChar8*)display_title.c_str(), display_title.length(),

@@ -97,6 +97,18 @@ void nwm::tile_horizontal(Base &base) {
             int win_width = window_width - 2 * base.gaps - 2 * base.border_width;
             int win_height = usable_height - 2 * base.gaps - 2 * base.border_width;
 
+            if (tiled_windows[i]->has_titlebar) {
+                int tb_height = base.titlebar_height;
+                y_pos += tb_height;
+                win_height -= tb_height;
+
+                XMoveResizeWindow(base.display, tiled_windows[i]->titlebar.window,
+                                 x_pos - base.border_width, y_pos - tb_height - base.border_width,
+                                 win_width + 2 * base.border_width, tb_height);
+                tiled_windows[i]->titlebar.width = win_width + 2 * base.border_width;
+                nwm::titlebar_draw(tiled_windows[i], base);
+            }
+
             if (win_width < 1) win_width = 1;
             if (win_height < 1) win_height = 1;
 
@@ -108,11 +120,6 @@ void nwm::tile_horizontal(Base &base) {
             XMoveResizeWindow(base.display, tiled_windows[i]->window,
                              tiled_windows[i]->x, tiled_windows[i]->y,
                              tiled_windows[i]->width, tiled_windows[i]->height);
-
-            if (tiled_windows[i]->has_titlebar) {
-                tiled_windows[i]->titlebar.width = win_width;
-                nwm::titlebar_draw(tiled_windows[i], base);
-            }
         }
     }
 
@@ -188,22 +195,34 @@ void nwm::tile_windows(Base &base) {
         if (usable_width < 10) usable_width = mon.width;
 
         if (tiled_windows.size() == 1) {
-            tiled_windows[0]->x = x_start + base.gaps;
-            tiled_windows[0]->y = y_start + base.gaps;
-            tiled_windows[0]->width = usable_width - 2 * base.gaps - 2 * base.border_width;
-            tiled_windows[0]->height = usable_height - 2 * base.gaps - 2 * base.border_width;
+            int win_x = x_start + base.gaps;
+            int win_y = y_start + base.gaps;
+            int win_width = usable_width - 2 * base.gaps - 2 * base.border_width;
+            int win_height = usable_height - 2 * base.gaps - 2 * base.border_width;
 
-            if (tiled_windows[0]->width < 1) tiled_windows[0]->width = 1;
-            if (tiled_windows[0]->height < 1) tiled_windows[0]->height = 1;
+            if (tiled_windows[0]->has_titlebar) {
+                int tb_height = base.titlebar_height;
+                win_y += tb_height;
+                win_height -= tb_height;
+
+                XMoveResizeWindow(base.display, tiled_windows[0]->titlebar.window,
+                                 win_x - base.border_width, win_y - tb_height - base.border_width,
+                                 win_width + 2 * base.border_width, tb_height);
+                tiled_windows[0]->titlebar.width = win_width + 2 * base.border_width;
+                nwm::titlebar_draw(tiled_windows[0], base);
+            }
+
+            if (win_width < 1) win_width = 1;
+            if (win_height < 1) win_height = 1;
+
+            tiled_windows[0]->x = win_x;
+            tiled_windows[0]->y = win_y;
+            tiled_windows[0]->width = win_width;
+            tiled_windows[0]->height = win_height;
 
             XMoveResizeWindow(base.display, tiled_windows[0]->window,
                              tiled_windows[0]->x, tiled_windows[0]->y,
                              tiled_windows[0]->width, tiled_windows[0]->height);
-
-            if (tiled_windows[0]->has_titlebar) {
-                tiled_windows[0]->titlebar.width = tiled_windows[0]->width;
-                nwm::titlebar_draw(tiled_windows[0], base);
-            }
         } else {
             int master_width = (int)(usable_width * mon.master_factor) - base.gaps - base.gaps / 2 - 2 * base.border_width;
             int stack_x = x_start + (int)(usable_width * mon.master_factor) + base.gaps / 2;
@@ -213,28 +232,56 @@ void nwm::tile_windows(Base &base) {
             if (stack_width < 1) stack_width = 1;
 
             int stack_height = (usable_height - base.gaps * tiled_windows.size()) / (tiled_windows.size() - 1) - 2 * base.border_width;
+            
+            // Adjust stack_height for titlebars if they exist
+            if (tiled_windows[0]->has_titlebar) {
+                stack_height -= base.titlebar_height;
+            }
             if (stack_height < 1) stack_height = 1;
 
+            int master_y = y_start + base.gaps;
+            int master_h = usable_height - 2 * base.gaps - 2 * base.border_width;
+
+            if (tiled_windows[0]->has_titlebar) {
+                int tb_height = base.titlebar_height;
+                master_y += tb_height;
+                master_h -= tb_height;
+
+                XMoveResizeWindow(base.display, tiled_windows[0]->titlebar.window,
+                                 x_start + base.gaps - base.border_width, master_y - tb_height - base.border_width,
+                                 master_width + 2 * base.border_width, tb_height);
+                tiled_windows[0]->titlebar.width = master_width + 2 * base.border_width;
+                nwm::titlebar_draw(tiled_windows[0], base);
+            }
+
             tiled_windows[0]->x = x_start + base.gaps;
-            tiled_windows[0]->y = y_start + base.gaps;
+            tiled_windows[0]->y = master_y;
             tiled_windows[0]->width = master_width;
-            tiled_windows[0]->height = usable_height - 2 * base.gaps - 2 * base.border_width;
-            if (tiled_windows[0]->height < 1) tiled_windows[0]->height = 1;
+            tiled_windows[0]->height = master_h;
 
             for (size_t i = 1; i < tiled_windows.size(); ++i) {
+                int win_y = y_start + base.gaps + (i - 1) * (stack_height + (tiled_windows[0]->has_titlebar ? base.titlebar_height : 0) + base.gaps + 2 * base.border_width);
+                int win_h = stack_height;
+
+                if (tiled_windows[i]->has_titlebar) {
+                    int tb_height = base.titlebar_height;
+                    win_y += tb_height;
+
+                    XMoveResizeWindow(base.display, tiled_windows[i]->titlebar.window,
+                                     stack_x - base.border_width, win_y - tb_height - base.border_width,
+                                     stack_width + 2 * base.border_width, tb_height);
+                    tiled_windows[i]->titlebar.width = stack_width + 2 * base.border_width;
+                    nwm::titlebar_draw(tiled_windows[i], base);
+                }
+
                 tiled_windows[i]->x = stack_x;
-                tiled_windows[i]->y = y_start + base.gaps + (i - 1) * (stack_height + base.gaps + 2 * base.border_width);
+                tiled_windows[i]->y = win_y;
                 tiled_windows[i]->width = stack_width;
-                tiled_windows[i]->height = stack_height;
+                tiled_windows[i]->height = win_h;
             }
 
             for (auto *w : tiled_windows) {
                 XMoveResizeWindow(base.display, w->window, w->x, w->y, w->width, w->height);
-
-                if (w->has_titlebar) {
-                    w->titlebar.width = w->width;
-                    nwm::titlebar_draw(w, base);
-                }
             }
         }
     }
