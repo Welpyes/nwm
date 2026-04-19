@@ -10,6 +10,7 @@
 #include <X11/cursorfont.h>
 #include <X11/Xft/Xft.h>
 #include <X11/extensions/Xrandr.h>
+#include <X11/Xproto.h>
 #include <iostream>
 #include <algorithm>
 #include <unistd.h>
@@ -46,6 +47,19 @@ static bool is_typed_float(Display *display, Window window)
 
 int x_error_handler(Display *dpy, XErrorEvent *error)
 {
+    if (error->error_code == BadWindow ||
+            (error->request_code == X_SetInputFocus && error->error_code == BadMatch) ||
+            (error->request_code == X_PolyFillRectangle && error->error_code == BadDrawable) ||
+            (error->request_code == X_PolySegment && error->error_code == BadDrawable) ||
+            (error->request_code == X_ConfigureWindow && error->error_code == BadMatch) ||
+            (error->request_code == X_GrabButton && error->error_code == BadAccess) ||
+            (error->request_code == X_GrabKey && error->error_code == BadAccess) ||
+            (error->request_code == X_CopyArea && error->error_code == BadDrawable) ||
+            (error->request_code == X_GetProperty && error->error_code == BadWindow) ||
+            (error->error_code == BadDrawable)) {
+        return 0;
+    }
+
     char error_text[1024];
     XGetErrorText(dpy, error->error_code, error_text, sizeof(error_text));
     std::cerr << "X Error: " << error_text
@@ -1983,40 +1997,12 @@ void nwm::handle_motion_notify(XMotionEvent *e, Base &base)
 
 void nwm::handle_enter_notify(XCrossingEvent *e, Base &base)
 {
-    if (e->window == base.bar.window) {
+    if (e->window == base.root || e->window == base.bar.window) {
         return;
     }
 
     if (base.dragging || base.resizing) {
         return;
-    }
-
-    XWindowAttributes attr;
-    if (XGetWindowAttributes(base.display, e->window, &attr)) {
-        if (attr.override_redirect) {
-            return;
-        }
-    }
-
-    Atom actual_type;
-    int actual_format;
-    unsigned long nitems, bytes_after;
-    unsigned char *prop = nullptr;
-
-    Atom window_type_atom = XInternAtom(base.display, "_NET_WM_WINDOW_TYPE", False);
-    if (XGetWindowProperty(base.display, e->window, window_type_atom, 0, 1,
-                           False, XA_ATOM, &actual_type, &actual_format,
-                           &nitems, &bytes_after, &prop) == Success && prop) {
-        Atom type = *(Atom*)prop;
-        XFree(prop);
-
-        Atom dropdown = XInternAtom(base.display, "_NET_WM_WINDOW_TYPE_DROPDOWN_MENU", False);
-        Atom popup = XInternAtom(base.display, "_NET_WM_WINDOW_TYPE_POPUP_MENU", False);
-        Atom combo = XInternAtom(base.display, "_NET_WM_WINDOW_TYPE_COMBO", False);
-
-        if (type == dropdown || type == popup || type == combo) {
-            return;
-        }
     }
 
     auto &current_ws = get_current_workspace(base);
@@ -2201,7 +2187,7 @@ void nwm::titlebar_draw(ManagedWindow* window, Base &base)
 
 void nwm::titlebar_update_title(ManagedWindow* window, Base &base)
 {
-    if (!window->has_titlebar) return;
+    if (!window->has_titlebar || window->window == 0) return;
 
     std::string new_title = get_window_title(base.display, window->window);
     if (new_title != window->title) {
@@ -2376,6 +2362,13 @@ void nwm::init(Base &base)
     workspace_init(base);
     monitors_init(base);
     animations_init(base);
+
+    base.net_wm_window_opacity = XInternAtom(base.display, "_NET_WM_WINDOW_OPACITY", False);
+    base.net_wm_state = XInternAtom(base.display, "_NET_WM_STATE", False);
+    base.net_wm_state_fullscreen = XInternAtom(base.display, "_NET_WM_STATE_FULLSCREEN", False);
+    base.net_wm_window_type = XInternAtom(base.display, "_NET_WM_WINDOW_TYPE", False);
+    base.net_wm_name = XInternAtom(base.display, "_NET_WM_NAME", False);
+    base.utf8_string = XInternAtom(base.display, "UTF8_STRING", False);
 
     Atom current_ws_atom = XInternAtom(base.display, "_NWM_CURRENT_WORKSPACE", False);
     Atom current_mon_atom = XInternAtom(base.display, "_NWM_CURRENT_MONITOR", False);

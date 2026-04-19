@@ -113,6 +113,15 @@ struct Base {
 
     StatusBar bar;
     SystemTray systray;
+
+    // Common Atoms
+    Atom net_wm_window_opacity;
+    Atom net_wm_state;
+    Atom net_wm_state_fullscreen;
+    Atom net_wm_window_type;
+    Atom net_wm_name;
+    Atom utf8_string;
+
     std::vector<Workspace> workspaces;
     size_t current_workspace;
     bool overview_mode;
