@@ -786,7 +786,9 @@ void nwm::toggle_fullscreen(void *arg, Base &base)
                 Monitor *mon = get_monitor_at_point(base, w.x + w.width / 2, w.y + w.height / 2);
                 if (!mon) mon = get_current_monitor(base);
                 if (!mon) return;
-                XUnmapWindow(base.display, base.bar.window);
+                if (base.bar.window) {
+                    XUnmapWindow(base.display, base.bar.window);
+                }
                 XSetWindowBorderWidth(base.display, w.window, 0);
                 XMoveResizeWindow(base.display, w.window, mon->x, mon->y, mon->width, mon->height);
                 XRaiseWindow(base.display, w.window);
@@ -797,8 +799,10 @@ void nwm::toggle_fullscreen(void *arg, Base &base)
             } else {
                 w.is_floating = w.pre_fs_floating;
                 XSetWindowBorderWidth(base.display, w.window, base.border_width);
-                XMapWindow(base.display, base.bar.window);
-                XRaiseWindow(base.display, base.bar.window);
+                if (base.bar.window) {
+                    XMapWindow(base.display, base.bar.window);
+                    XRaiseWindow(base.display, base.bar.window);
+                }
                 Atom wm_state = XInternAtom(base.display, "_NET_WM_STATE", False);
                 XDeleteProperty(base.display, w.window, wm_state);
                 if (base.horizontal_mode) {
@@ -1075,10 +1079,12 @@ void nwm::toggle_bar(void *arg, Base &base)
     (void)arg;
     base.bar_visible = !base.bar_visible;
 
-    if (base.bar_visible) {
-        XMapWindow(base.display, base.bar.window);
-    } else {
-        XUnmapWindow(base.display, base.bar.window);
+    if (base.bar.window) {
+        if (base.bar_visible) {
+            XMapWindow(base.display, base.bar.window);
+        } else {
+            XUnmapWindow(base.display, base.bar.window);
+        }
     }
 
     if (base.horizontal_mode) {
@@ -2749,9 +2755,11 @@ void nwm::run(Base &base)
                  ButtonPressMask | ButtonReleaseMask | PointerMotionMask |
                  EnterWindowMask | KeyPressMask | PropertyChangeMask);
 
-    XSelectInput(base.display, base.bar.window,
-                 ExposureMask | ButtonPressMask | ButtonReleaseMask |
-                 PointerMotionMask | Button4Mask | Button5Mask);
+    if (base.bar.window) {
+        XSelectInput(base.display, base.bar.window,
+                     ExposureMask | ButtonPressMask | ButtonReleaseMask |
+                     PointerMotionMask | EnterWindowMask);
+    }
 
     XSetErrorHandler(x_error_handler);
 

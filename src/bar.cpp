@@ -108,6 +108,10 @@ void nwm::bar_update_status_text(Base &base) {
 }
 
 void nwm::bar_draw(Base &base) {
+    if (!base.use_builtin_bar || !base.bar.window) {
+        return;
+    }
+
     Pixmap pixmap = XCreatePixmap(base.display, base.bar.window,
                                    base.bar.width, base.bar.height,
                                    DefaultDepth(base.display, base.screen));

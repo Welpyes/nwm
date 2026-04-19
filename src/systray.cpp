@@ -31,6 +31,10 @@ void nwm::systray_init(Base &base) {
     base.systray.icon_size = TRAY_ICON_SIZE;
     base.systray.padding = TRAY_PADDING;
 
+    if (!base.use_builtin_bar || !base.bar.window) {
+        return;
+    }
+
     char tray_atom_name[32];
     snprintf(tray_atom_name, sizeof(tray_atom_name), "_NET_SYSTEM_TRAY_S%d", base.screen);
     base.systray.selection_atom = XInternAtom(base.display, tray_atom_name, False);
@@ -149,6 +153,8 @@ void nwm::systray_update(Base &base) {
 }
 
 void nwm::systray_add_icon(Base &base, Window icon) {
+    if (!base.bar.window) return;
+
     for (const auto &existing : base.systray.icons) {
         if (existing.window == icon) {
             return;
