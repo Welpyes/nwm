@@ -940,10 +940,6 @@ void nwm::animate_workspace_switch(Base &base, int from_workspace, int to_worksp
                 if (w.has_titlebar) {
                     XUnmapWindow(base.display, w.titlebar.window);
                 }
-                // Reset opacity for next time this workspace is shown
-                unsigned long op_val = 4294967295;
-                XChangeProperty(base.display, w.window, base.net_wm_window_opacity, XA_CARDINAL, 32,
-                               PropModeReplace, (unsigned char*)&op_val, 1);
             }
         }
         if (to_workspace >= 0 && to_workspace < (int)base.workspaces.size()) {

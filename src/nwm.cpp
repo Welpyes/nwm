@@ -2690,6 +2690,7 @@ void nwm::manage_window(Window window, Base &base)
     w.pre_fs_width = 0;
     w.pre_fs_height = 0;
     w.pre_fs_floating = false;
+    w.is_new = true;
 
     w.monitor = target_monitor;
 

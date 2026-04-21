@@ -46,6 +46,7 @@ struct ManagedWindow {
     int pre_fs_x, pre_fs_y;
     int pre_fs_width, pre_fs_height;
     bool pre_fs_floating;
+    bool is_new;
     
     // Title bar support
     TitleBar titlebar;

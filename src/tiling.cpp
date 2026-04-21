@@ -106,9 +106,16 @@ void nwm::tile_horizontal(Base &base) {
                 y_pos += tb_height;
                 win_height -= tb_height;
 
-                nwm::animate_window_move_resize(base, tiled_windows[i]->titlebar.window,
-                                 x_pos - base.border_width, y_pos - tb_height - base.border_width,
-                                 win_width + 2 * base.border_width, tb_height);
+                int tb_x = x_pos - base.border_width;
+                int tb_y = y_pos - tb_height - base.border_width;
+                int tb_w = win_width + 2 * base.border_width;
+
+                if (tiled_windows[i]->is_new) {
+                    XMoveResizeWindow(base.display, tiled_windows[i]->titlebar.window, tb_x, tb_y, tb_w, tb_height);
+                } else {
+                    nwm::animate_window_move_resize(base, tiled_windows[i]->titlebar.window, tb_x, tb_y, tb_w, tb_height);
+                }
+                
                 tiled_windows[i]->titlebar.width = win_width + 2 * base.border_width;
                 nwm::titlebar_draw(tiled_windows[i], base);
             }
@@ -121,9 +128,14 @@ void nwm::tile_horizontal(Base &base) {
             tiled_windows[i]->width = win_width;
             tiled_windows[i]->height = win_height;
 
-            nwm::animate_window_move_resize(base, tiled_windows[i]->window,
-                             tiled_windows[i]->x, tiled_windows[i]->y,
-                             tiled_windows[i]->width, tiled_windows[i]->height);
+            if (tiled_windows[i]->is_new) {
+                XMoveResizeWindow(base.display, tiled_windows[i]->window, x_pos, y_pos, win_width, win_height);
+                tiled_windows[i]->is_new = false;
+            } else {
+                nwm::animate_window_move_resize(base, tiled_windows[i]->window,
+                                 tiled_windows[i]->x, tiled_windows[i]->y,
+                                 tiled_windows[i]->width, tiled_windows[i]->height);
+            }
             }
             }
     XFlush(base.display);
@@ -213,9 +225,16 @@ void nwm::tile_windows(Base &base) {
                 win_y += tb_height;
                 win_height -= tb_height;
 
-                nwm::animate_window_move_resize(base, tiled_windows[0]->titlebar.window,
-                                 win_x - base.border_width, win_y - tb_height - base.border_width,
-                                 win_width + 2 * base.border_width, tb_height);
+                int tb_x = win_x - base.border_width;
+                int tb_y = win_y - tb_height - base.border_width;
+                int tb_w = win_width + 2 * base.border_width;
+
+                if (tiled_windows[0]->is_new) {
+                    XMoveResizeWindow(base.display, tiled_windows[0]->titlebar.window, tb_x, tb_y, tb_w, tb_height);
+                } else {
+                    nwm::animate_window_move_resize(base, tiled_windows[0]->titlebar.window, tb_x, tb_y, tb_w, tb_height);
+                }
+                
                 tiled_windows[0]->titlebar.width = win_width + 2 * base.border_width;
                 nwm::titlebar_draw(tiled_windows[0], base);
             }
@@ -228,9 +247,14 @@ void nwm::tile_windows(Base &base) {
             tiled_windows[0]->width = win_width;
             tiled_windows[0]->height = win_height;
 
-            nwm::animate_window_move_resize(base, tiled_windows[0]->window,
-                             tiled_windows[0]->x, tiled_windows[0]->y,
-                             tiled_windows[0]->width, tiled_windows[0]->height);
+            if (tiled_windows[0]->is_new) {
+                XMoveResizeWindow(base.display, tiled_windows[0]->window, tiled_windows[0]->x, tiled_windows[0]->y, tiled_windows[0]->width, tiled_windows[0]->height);
+                tiled_windows[0]->is_new = false;
+            } else {
+                nwm::animate_window_move_resize(base, tiled_windows[0]->window,
+                                 tiled_windows[0]->x, tiled_windows[0]->y,
+                                 tiled_windows[0]->width, tiled_windows[0]->height);
+            }
         } else {
             int master_width = (int)(usable_width * mon.master_factor) - base.gaps - base.gaps / 2 - 2 * base.border_width;
             int stack_x = x_start + (int)(usable_width * mon.master_factor) + base.gaps / 2;
@@ -255,9 +279,16 @@ void nwm::tile_windows(Base &base) {
                 master_y += tb_height;
                 master_h -= tb_height;
 
-                nwm::animate_window_move_resize(base, tiled_windows[0]->titlebar.window,
-                                 x_start + base.gaps - base.border_width, master_y - tb_height - base.border_width,
-                                 master_width + 2 * base.border_width, tb_height);
+                int tb_x = x_start + base.gaps - base.border_width;
+                int tb_y = master_y - tb_height - base.border_width;
+                int tb_w = master_width + 2 * base.border_width;
+
+                if (tiled_windows[0]->is_new) {
+                    XMoveResizeWindow(base.display, tiled_windows[0]->titlebar.window, tb_x, tb_y, tb_w, tb_height);
+                } else {
+                    nwm::animate_window_move_resize(base, tiled_windows[0]->titlebar.window, tb_x, tb_y, tb_w, tb_height);
+                }
+                
                 tiled_windows[0]->titlebar.width = master_width + 2 * base.border_width;
                 nwm::titlebar_draw(tiled_windows[0], base);
             }
@@ -275,9 +306,16 @@ void nwm::tile_windows(Base &base) {
                     int tb_height = base.titlebar_height;
                     win_y += tb_height;
 
-                    nwm::animate_window_move_resize(base, tiled_windows[i]->titlebar.window,
-                                     stack_x - base.border_width, win_y - tb_height - base.border_width,
-                                     stack_width + 2 * base.border_width, tb_height);
+                    int tb_x = stack_x - base.border_width;
+                    int tb_y = win_y - tb_height - base.border_width;
+                    int tb_w = stack_width + 2 * base.border_width;
+
+                    if (tiled_windows[i]->is_new) {
+                        XMoveResizeWindow(base.display, tiled_windows[i]->titlebar.window, tb_x, tb_y, tb_w, tb_height);
+                    } else {
+                        nwm::animate_window_move_resize(base, tiled_windows[i]->titlebar.window, tb_x, tb_y, tb_w, tb_height);
+                    }
+                    
                     tiled_windows[i]->titlebar.width = stack_width + 2 * base.border_width;
                     nwm::titlebar_draw(tiled_windows[i], base);
                 }
@@ -289,7 +327,12 @@ void nwm::tile_windows(Base &base) {
             }
 
             for (auto *w : tiled_windows) {
-                nwm::animate_window_move_resize(base, w->window, w->x, w->y, w->width, w->height);
+                if (w->is_new) {
+                    XMoveResizeWindow(base.display, w->window, w->x, w->y, w->width, w->height);
+                    w->is_new = false;
+                } else {
+                    nwm::animate_window_move_resize(base, w->window, w->x, w->y, w->width, w->height);
+                }
             }
         }
     }
