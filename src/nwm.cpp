@@ -851,12 +851,16 @@ void nwm::switch_workspace(void *arg, Base &base)
     }
 
     auto &current_ws = base.workspaces[base.current_workspace];
+    bool animate = base.anim_manager && base.anim_manager->animations_enabled &&
+                   base.anim_manager->workspace_switch_enabled;
 
-    for (auto &w : current_ws.windows) {
-        if (!is_window_animating(base, w.window)) {
-            XUnmapWindow(base.display, w.window);
-            if (w.has_titlebar) {
-                XUnmapWindow(base.display, w.titlebar.window);
+    if (!animate) {
+        for (auto &w : current_ws.windows) {
+            if (!is_window_animating(base, w.window)) {
+                XUnmapWindow(base.display, w.window);
+                if (w.has_titlebar) {
+                    XUnmapWindow(base.display, w.titlebar.window);
+                }
             }
         }
     }
@@ -869,14 +873,18 @@ void nwm::switch_workspace(void *arg, Base &base)
         mon->current_workspace = target_ws;
     }
 
-    if (base.anim_manager && base.anim_manager->animations_enabled &&
-            base.anim_manager->workspace_switch_enabled) {
+    if (animate) {
         animate_workspace_switch(base, old_workspace, target_ws);
     }
 
     auto &new_ws = base.workspaces[target_ws];
 
     for (auto &w : new_ws.windows) {
+        if (animate) {
+            unsigned long op_val = 0;
+            XChangeProperty(base.display, w.window, base.net_wm_window_opacity, XA_CARDINAL, 32,
+                           PropModeReplace, (unsigned char*)&op_val, 1);
+        }
         XMapWindow(base.display, w.window);
         if (w.has_titlebar && !w.is_floating && !w.is_fullscreen) {
             XMapWindow(base.display, w.titlebar.window);
@@ -886,6 +894,8 @@ void nwm::switch_workspace(void *arg, Base &base)
             XRaiseWindow(base.display, w.window);
         }
     }
+
+    XFlush(base.display);
 
     if (base.horizontal_mode) {
         tile_horizontal(base);
@@ -1315,16 +1325,21 @@ void nwm::focus_prev(void *arg, Base &base)
 void nwm::move_window(ManagedWindow *window, int x, int y, Base &base)
 {
     if (window) {
-        window->x = x;
-        window->y = y;
-        XMoveWindow(base.display, window->window, x, y);
+        if (base.anim_manager && base.anim_manager->animations_enabled &&
+            base.anim_manager->window_move_enabled) {
+            animate_window_move(base, window->window, x, y);
+        } else {
+            window->x = x;
+            window->y = y;
+            XMoveWindow(base.display, window->window, x, y);
 
-        if (window->has_titlebar) {
-            window->titlebar.x = x - base.border_width;
-            window->titlebar.y = y - base.titlebar_height;
-            XMoveWindow(base.display, window->titlebar.window,
-                        window->titlebar.x, window->titlebar.y);
-            XRaiseWindow(base.display, window->titlebar.window);
+            if (window->has_titlebar) {
+                window->titlebar.x = x - base.border_width;
+                window->titlebar.y = y - base.titlebar_height;
+                XMoveWindow(base.display, window->titlebar.window,
+                            window->titlebar.x, window->titlebar.y);
+                XRaiseWindow(base.display, window->titlebar.window);
+            }
         }
     }
 }
@@ -1332,16 +1347,21 @@ void nwm::move_window(ManagedWindow *window, int x, int y, Base &base)
 void nwm::resize_window(ManagedWindow *window, int width, int height, Base &base)
 {
     if (window) {
-        window->width = width;
-        window->height = height;
-        XResizeWindow(base.display, window->window, width, height);
+        if (base.anim_manager && base.anim_manager->animations_enabled &&
+            base.anim_manager->window_resize_enabled) {
+            animate_window_resize(base, window->window, width, height);
+        } else {
+            window->width = width;
+            window->height = height;
+            XResizeWindow(base.display, window->window, width, height);
 
-        if (window->has_titlebar) {
-            window->titlebar.width = width + (2 * base.border_width);
-            XResizeWindow(base.display, window->titlebar.window,
-                          window->titlebar.width, window->titlebar.height);
-            XRaiseWindow(base.display, window->titlebar.window);
-            titlebar_draw(window, base);
+            if (window->has_titlebar) {
+                window->titlebar.width = width + (2 * base.border_width);
+                XResizeWindow(base.display, window->titlebar.window,
+                              window->titlebar.width, window->titlebar.height);
+                XRaiseWindow(base.display, window->titlebar.window);
+                titlebar_draw(window, base);
+            }
         }
     }
 }

@@ -82,6 +82,42 @@ float nwm::apply_easing(float t, EasingType type) {
     }
 }
 
+void nwm::WindowMoveResizeAnimation::update(Base &base, float progress) {
+    float eased = apply_easing(progress, easing);
+
+    int current_x = start_x + (int)((target_x - start_x) * eased);
+    int current_y = start_y + (int)((target_y - start_y) * eased);
+    int current_width = start_width + (int)((target_width - start_width) * eased);
+    int current_height = start_height + (int)((target_height - start_height) * eased);
+
+    for (auto &ws : base.workspaces) {
+        for (auto &w : ws.windows) {
+            if (w.window == window) {
+                w.x = current_x;
+                w.y = current_y;
+                w.width = current_width;
+                w.height = current_height;
+                XMoveResizeWindow(base.display, window, current_x, current_y,
+                                std::max(1, current_width), std::max(1, current_height));
+
+                if (w.has_titlebar) {
+                    w.titlebar.x = current_x - base.border_width;
+                    w.titlebar.y = current_y - base.titlebar_height;
+                    w.titlebar.width = current_width + 2 * base.border_width;
+                    XMoveResizeWindow(base.display, w.titlebar.window,
+                                    w.titlebar.x, w.titlebar.y,
+                                    w.titlebar.width, w.titlebar.height);
+                    XRaiseWindow(base.display, w.titlebar.window);
+                    titlebar_draw(&w, base);
+                }
+
+                XFlush(base.display);
+                return;
+            }
+        }
+    }
+}
+
 void nwm::ScrollAnimation::update(Base &base, float progress) {
     float eased = apply_easing(progress, easing);
     int current_offset = start_offset + (int)((target_offset - start_offset) * eased);
@@ -106,6 +142,14 @@ void nwm::WindowMoveAnimation::update(Base &base, float progress) {
                 w.x = current_x;
                 w.y = current_y;
                 XMoveWindow(base.display, window, current_x, current_y);
+
+                if (w.has_titlebar) {
+                    w.titlebar.x = current_x - base.border_width;
+                    w.titlebar.y = current_y - base.titlebar_height;
+                    XMoveWindow(base.display, w.titlebar.window, w.titlebar.x, w.titlebar.y);
+                    XRaiseWindow(base.display, w.titlebar.window);
+                }
+
                 XFlush(base.display);
                 return;
             }
@@ -125,6 +169,14 @@ void nwm::WindowResizeAnimation::update(Base &base, float progress) {
                 w.width = current_width;
                 w.height = current_height;
                 XResizeWindow(base.display, window, current_width, current_height);
+
+                if (w.has_titlebar) {
+                    w.titlebar.width = current_width + 2 * base.border_width;
+                    XResizeWindow(base.display, w.titlebar.window, w.titlebar.width, w.titlebar.height);
+                    XRaiseWindow(base.display, w.titlebar.window);
+                    titlebar_draw(&w, base);
+                }
+
                 XFlush(base.display);
                 return;
             }
@@ -152,7 +204,9 @@ void nwm::MasterFactorAnimation::update(Base &base, float progress) {
     if (mon) {
         mon->master_factor = current_factor;
 
-        if (!base.horizontal_mode) {
+        if (base.horizontal_mode) {
+            tile_horizontal(base);
+        } else {
             tile_windows(base);
         }
     }
@@ -269,8 +323,29 @@ void nwm::WindowCloseAnimation::update(Base &base, float progress) {
 }
 
 void nwm::WorkspaceSwitchAnimation::update(Base &base, float progress) {
-    (void)base;
-    (void)progress;
+    float eased = apply_easing(progress, easing);
+
+    // Fade out old workspace
+    if (from_workspace >= 0 && from_workspace < (int)base.workspaces.size()) {
+        float opacity = 1.0f - eased;
+        unsigned long op_val = (unsigned long)(std::clamp(opacity, 0.0f, 1.0f) * 4294967295.0);
+        for (auto &w : base.workspaces[from_workspace].windows) {
+            XChangeProperty(base.display, w.window, base.net_wm_window_opacity, XA_CARDINAL, 32,
+                           PropModeReplace, (unsigned char*)&op_val, 1);
+        }
+    }
+
+    // Fade in new workspace
+    if (to_workspace >= 0 && to_workspace < (int)base.workspaces.size()) {
+        float opacity = eased;
+        unsigned long op_val = (unsigned long)(std::clamp(opacity, 0.0f, 1.0f) * 4294967295.0);
+        for (auto &w : base.workspaces[to_workspace].windows) {
+            XChangeProperty(base.display, w.window, base.net_wm_window_opacity, XA_CARDINAL, 32,
+                           PropModeReplace, (unsigned char*)&op_val, 1);
+        }
+    }
+
+    XFlush(base.display);
 }
 
 void nwm::BorderColorAnimation::update(Base &base, float progress) {
@@ -591,6 +666,69 @@ void nwm::animate_window_resize(Base &base, Window window, int target_width, int
     base.anim_manager->animations.push_back(anim);
 }
 
+void nwm::animate_window_move_resize(Base &base, Window window, int target_x, int target_y, int target_width, int target_height) {
+    if (!base.anim_manager || !base.anim_manager->animations_enabled ||
+        (!base.anim_manager->window_move_enabled && !base.anim_manager->window_resize_enabled)) {
+        XMoveResizeWindow(base.display, window, target_x, target_y, target_width, target_height);
+        return;
+    }
+
+    XWindowAttributes attr;
+    if (!XGetWindowAttributes(base.display, window, &attr)) {
+        return;
+    }
+
+    for (auto it = base.anim_manager->animations.begin();
+         it != base.anim_manager->animations.end();) {
+        if ((*it)->type == AnimationType::WINDOW_MOVE_RESIZE ||
+            (*it)->type == AnimationType::WINDOW_MOVE ||
+            (*it)->type == AnimationType::WINDOW_RESIZE ||
+            (*it)->type == AnimationType::FLOATING_TRANSITION) {
+            bool should_remove = false;
+            if ((*it)->type == AnimationType::WINDOW_MOVE_RESIZE) {
+                WindowMoveResizeAnimation *anim = static_cast<WindowMoveResizeAnimation*>(*it);
+                if (anim->window == window) should_remove = true;
+            } else if ((*it)->type == AnimationType::WINDOW_MOVE) {
+                WindowMoveAnimation *anim = static_cast<WindowMoveAnimation*>(*it);
+                if (anim->window == window) should_remove = true;
+            } else if ((*it)->type == AnimationType::WINDOW_RESIZE) {
+                WindowResizeAnimation *anim = static_cast<WindowResizeAnimation*>(*it);
+                if (anim->window == window) should_remove = true;
+            } else if ((*it)->type == AnimationType::FLOATING_TRANSITION) {
+                FloatingTransitionAnimation *anim = static_cast<FloatingTransitionAnimation*>(*it);
+                if (anim->window == window) should_remove = true;
+            }
+
+            if (should_remove) {
+                delete *it;
+                it = base.anim_manager->animations.erase(it);
+                continue;
+            }
+        }
+        ++it;
+    }
+
+    WindowMoveResizeAnimation *anim = new WindowMoveResizeAnimation();
+    anim->type = AnimationType::WINDOW_MOVE_RESIZE;
+    anim->start_time = std::chrono::steady_clock::now();
+    anim->duration_ms = base.anim_manager->window_move_duration;
+    anim->easing = base.anim_manager->window_move_easing;
+    anim->completed = false;
+    anim->workspace_index = base.current_workspace;
+    anim->monitor_index = base.current_monitor;
+    anim->window = window;
+    anim->start_x = attr.x;
+    anim->start_y = attr.y;
+    anim->start_width = attr.width;
+    anim->start_height = attr.height;
+    anim->target_x = target_x;
+    anim->target_y = target_y;
+    anim->target_width = target_width;
+    anim->target_height = target_height;
+
+    base.anim_manager->animations.push_back(anim);
+}
+
 void nwm::animate_window_opacity(Base &base, Window window, float target_opacity) {
     if (!base.anim_manager || !base.anim_manager->animations_enabled ||
         !base.anim_manager->opacity_enabled) {
@@ -651,7 +789,11 @@ void nwm::animate_master_factor(Base &base, float target_factor) {
     if (!base.anim_manager || !base.anim_manager->animations_enabled ||
         !base.anim_manager->master_factor_enabled) {
         mon->master_factor = target_factor;
-        tile_windows(base);
+        if (base.horizontal_mode) {
+            tile_horizontal(base);
+        } else {
+            tile_windows(base);
+        }
         return;
     }
 
@@ -790,6 +932,29 @@ void nwm::animate_workspace_switch(Base &base, int from_workspace, int to_worksp
     anim->from_workspace = from_workspace;
     anim->to_workspace = to_workspace;
     anim->slide_progress = 0.0f;
+
+    anim->on_complete = [&base, from_workspace, to_workspace]() {
+        if (from_workspace >= 0 && from_workspace < (int)base.workspaces.size()) {
+            for (auto &w : base.workspaces[from_workspace].windows) {
+                XUnmapWindow(base.display, w.window);
+                if (w.has_titlebar) {
+                    XUnmapWindow(base.display, w.titlebar.window);
+                }
+                // Reset opacity for next time this workspace is shown
+                unsigned long op_val = 4294967295;
+                XChangeProperty(base.display, w.window, base.net_wm_window_opacity, XA_CARDINAL, 32,
+                               PropModeReplace, (unsigned char*)&op_val, 1);
+            }
+        }
+        if (to_workspace >= 0 && to_workspace < (int)base.workspaces.size()) {
+            for (auto &w : base.workspaces[to_workspace].windows) {
+                unsigned long op_val = 4294967295;
+                XChangeProperty(base.display, w.window, base.net_wm_window_opacity, XA_CARDINAL, 32,
+                               PropModeReplace, (unsigned char*)&op_val, 1);
+            }
+        }
+        XFlush(base.display);
+    };
 
     base.anim_manager->animations.push_back(anim);
 }

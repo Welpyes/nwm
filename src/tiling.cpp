@@ -7,6 +7,10 @@
 
 
 void nwm::tile_horizontal(Base &base) {
+    static bool in_tile = false;
+    if (in_tile) return;
+    in_tile = true;
+
     auto &current_ws = get_current_workspace(base);
 
     for (auto &mon : base.monitors) {
@@ -102,7 +106,7 @@ void nwm::tile_horizontal(Base &base) {
                 y_pos += tb_height;
                 win_height -= tb_height;
 
-                XMoveResizeWindow(base.display, tiled_windows[i]->titlebar.window,
+                nwm::animate_window_move_resize(base, tiled_windows[i]->titlebar.window,
                                  x_pos - base.border_width, y_pos - tb_height - base.border_width,
                                  win_width + 2 * base.border_width, tb_height);
                 tiled_windows[i]->titlebar.width = win_width + 2 * base.border_width;
@@ -117,16 +121,20 @@ void nwm::tile_horizontal(Base &base) {
             tiled_windows[i]->width = win_width;
             tiled_windows[i]->height = win_height;
 
-            XMoveResizeWindow(base.display, tiled_windows[i]->window,
+            nwm::animate_window_move_resize(base, tiled_windows[i]->window,
                              tiled_windows[i]->x, tiled_windows[i]->y,
                              tiled_windows[i]->width, tiled_windows[i]->height);
-        }
-    }
-
+            }
+            }
     XFlush(base.display);
+    in_tile = false;
 }
 
 void nwm::tile_windows(Base &base) {
+    static bool in_tile = false;
+    if (in_tile) return;
+    in_tile = true;
+
     auto &current_ws = get_current_workspace(base);
 
     for (auto &mon : base.monitors) {
@@ -205,7 +213,7 @@ void nwm::tile_windows(Base &base) {
                 win_y += tb_height;
                 win_height -= tb_height;
 
-                XMoveResizeWindow(base.display, tiled_windows[0]->titlebar.window,
+                nwm::animate_window_move_resize(base, tiled_windows[0]->titlebar.window,
                                  win_x - base.border_width, win_y - tb_height - base.border_width,
                                  win_width + 2 * base.border_width, tb_height);
                 tiled_windows[0]->titlebar.width = win_width + 2 * base.border_width;
@@ -220,7 +228,7 @@ void nwm::tile_windows(Base &base) {
             tiled_windows[0]->width = win_width;
             tiled_windows[0]->height = win_height;
 
-            XMoveResizeWindow(base.display, tiled_windows[0]->window,
+            nwm::animate_window_move_resize(base, tiled_windows[0]->window,
                              tiled_windows[0]->x, tiled_windows[0]->y,
                              tiled_windows[0]->width, tiled_windows[0]->height);
         } else {
@@ -247,7 +255,7 @@ void nwm::tile_windows(Base &base) {
                 master_y += tb_height;
                 master_h -= tb_height;
 
-                XMoveResizeWindow(base.display, tiled_windows[0]->titlebar.window,
+                nwm::animate_window_move_resize(base, tiled_windows[0]->titlebar.window,
                                  x_start + base.gaps - base.border_width, master_y - tb_height - base.border_width,
                                  master_width + 2 * base.border_width, tb_height);
                 tiled_windows[0]->titlebar.width = master_width + 2 * base.border_width;
@@ -267,7 +275,7 @@ void nwm::tile_windows(Base &base) {
                     int tb_height = base.titlebar_height;
                     win_y += tb_height;
 
-                    XMoveResizeWindow(base.display, tiled_windows[i]->titlebar.window,
+                    nwm::animate_window_move_resize(base, tiled_windows[i]->titlebar.window,
                                      stack_x - base.border_width, win_y - tb_height - base.border_width,
                                      stack_width + 2 * base.border_width, tb_height);
                     tiled_windows[i]->titlebar.width = stack_width + 2 * base.border_width;
@@ -281,12 +289,13 @@ void nwm::tile_windows(Base &base) {
             }
 
             for (auto *w : tiled_windows) {
-                XMoveResizeWindow(base.display, w->window, w->x, w->y, w->width, w->height);
+                nwm::animate_window_move_resize(base, w->window, w->x, w->y, w->width, w->height);
             }
         }
     }
 
     XFlush(base.display);
+    in_tile = false;
 }
 
 void nwm::resize_master(void *arg, Base &base) {
@@ -303,22 +312,22 @@ void nwm::resize_master(void *arg, Base &base) {
         if (scroll_visible < 1) scroll_visible = 1;
 
         float delta_factor = (float)delta / (mon->width / scroll_visible);
-        mon->master_factor += delta_factor;
+        float new_factor = mon->master_factor + delta_factor;
 
-        if (mon->master_factor < 0.3f) mon->master_factor = 0.3f;
-        if (mon->master_factor > 3.0f) mon->master_factor = 3.0f;
+        if (new_factor < 0.3f) new_factor = 0.3f;
+        if (new_factor > 3.0f) new_factor = 3.0f;
 
-        tile_horizontal(base);
+        animate_master_factor(base, new_factor);
     } else {
         if (current_ws.windows.size() < 2) return;
 
         float delta_factor = (float)delta / mon->width;
-        mon->master_factor += delta_factor;
+        float new_factor = mon->master_factor + delta_factor;
 
-        if (mon->master_factor < 0.1f) mon->master_factor = 0.1f;
-        if (mon->master_factor > 0.9f) mon->master_factor = 0.9f;
+        if (new_factor < 0.1f) new_factor = 0.1f;
+        if (new_factor > 0.9f) new_factor = 0.9f;
 
-        tile_windows(base);
+        animate_master_factor(base, new_factor);
     }
 }
 

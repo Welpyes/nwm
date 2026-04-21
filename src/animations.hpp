@@ -30,7 +30,8 @@ enum class AnimationType {
     WINDOW_CLOSE,
     WORKSPACE_SWITCH,
     BORDER_COLOR_CHANGE,
-    FLOATING_TRANSITION
+    FLOATING_TRANSITION,
+    WINDOW_MOVE_RESIZE
 };
 
 struct Animation {
@@ -135,6 +136,14 @@ struct FloatingTransitionAnimation : public Animation {
     void update(Base &base, float progress) override;
 };
 
+struct WindowMoveResizeAnimation : public Animation {
+    Window window;
+    int start_x, start_y, start_width, start_height;
+    int target_x, target_y, target_width, target_height;
+
+    void update(Base &base, float progress) override;
+};
+
 struct AnimationManager {
     std::vector<Animation*> animations;
     bool animations_enabled;
@@ -192,6 +201,7 @@ void animate_scroll(Base &base, int target_offset);
 void animate_scroll_smooth(Base &base, int target_offset, int duration_ms, EasingType easing);
 void animate_window_move(Base &base, Window window, int target_x, int target_y);
 void animate_window_resize(Base &base, Window window, int target_width, int target_height);
+void animate_window_move_resize(Base &base, Window window, int target_x, int target_y, int target_width, int target_height);
 void animate_window_opacity(Base &base, Window window, float target_opacity);
 void animate_master_factor(Base &base, float target_factor);
 void animate_window_open(Base &base, Window window);
