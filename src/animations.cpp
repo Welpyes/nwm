@@ -133,6 +133,7 @@ void nwm::WindowResizeAnimation::update(Base &base, float progress) {
 }
 
 void nwm::WindowOpacityAnimation::update(Base &base, float progress) {
+    if (!base.anim_manager->opacity_enabled) return;
     float eased = apply_easing(progress, easing);
     float current_opacity = start_opacity + (target_opacity - start_opacity) * eased;
 
@@ -175,15 +176,16 @@ void nwm::WindowOpenAnimation::update(Base &base, float progress) {
 
     switch (base.anim_manager->window_open_style) {
         case AnimationManager::FADE: {
-            float current_opacity = start_opacity + (target_opacity - start_opacity) * eased;
-            unsigned long opacity_value = (unsigned long)(current_opacity * 0xFFFFFFFF);
-            XChangeProperty(base.display, window, base.net_wm_window_opacity, XA_CARDINAL, 32,
-                           PropModeReplace, (unsigned char*)&opacity_value, 1);
+            if (base.anim_manager->opacity_enabled) {
+                float current_opacity = start_opacity + (target_opacity - start_opacity) * eased;
+                unsigned long opacity_value = (unsigned long)(current_opacity * 0xFFFFFFFF);
+                XChangeProperty(base.display, window, base.net_wm_window_opacity, XA_CARDINAL, 32,
+                               PropModeReplace, (unsigned char*)&opacity_value, 1);
+            }
             break;
         }
         case AnimationManager::SCALE: {
             float current_scale = start_scale + (target_scale - start_scale) * eased;
-            float current_opacity = start_opacity + (target_opacity - start_opacity) * eased;
 
             int center_x = managed_win->x + managed_win->width / 2;
             int center_y = managed_win->y + managed_win->height / 2;
@@ -195,9 +197,12 @@ void nwm::WindowOpenAnimation::update(Base &base, float progress) {
 
             XMoveResizeWindow(base.display, window, scaled_x, scaled_y, scaled_width, scaled_height);
 
-            unsigned long opacity_value = (unsigned long)(current_opacity * 0xFFFFFFFF);
-            XChangeProperty(base.display, window, base.net_wm_window_opacity, XA_CARDINAL, 32,
-                           PropModeReplace, (unsigned char*)&opacity_value, 1);
+            if (base.anim_manager->opacity_enabled) {
+                float current_opacity = start_opacity + (target_opacity - start_opacity) * eased;
+                unsigned long opacity_value = (unsigned long)(current_opacity * 0xFFFFFFFF);
+                XChangeProperty(base.display, window, base.net_wm_window_opacity, XA_CARDINAL, 32,
+                               PropModeReplace, (unsigned char*)&opacity_value, 1);
+            }
             break;
         }
         case AnimationManager::SLIDE_FROM_TOP:
@@ -216,15 +221,16 @@ void nwm::WindowCloseAnimation::update(Base &base, float progress) {
 
     switch (base.anim_manager->window_close_style) {
         case AnimationManager::FADE_OUT: {
-            float current_opacity = start_opacity - (start_opacity - target_opacity) * eased;
-            unsigned long opacity_value = (unsigned long)(current_opacity * 0xFFFFFFFF);
-            XChangeProperty(base.display, window, base.net_wm_window_opacity, XA_CARDINAL, 32,
-                           PropModeReplace, (unsigned char*)&opacity_value, 1);
+            if (base.anim_manager->opacity_enabled) {
+                float current_opacity = start_opacity - (start_opacity - target_opacity) * eased;
+                unsigned long opacity_value = (unsigned long)(current_opacity * 0xFFFFFFFF);
+                XChangeProperty(base.display, window, base.net_wm_window_opacity, XA_CARDINAL, 32,
+                               PropModeReplace, (unsigned char*)&opacity_value, 1);
+            }
             break;
         }
         case AnimationManager::SCALE_DOWN: {
             float current_scale = start_scale - (start_scale - target_scale) * eased;
-            float current_opacity = start_opacity - (start_opacity - target_opacity) * eased;
 
             int center_x = original_x + original_width / 2;
             int center_y = original_y + original_height / 2;
@@ -237,19 +243,24 @@ void nwm::WindowCloseAnimation::update(Base &base, float progress) {
             XMoveResizeWindow(base.display, window, scaled_x, scaled_y,
                             std::max(1, scaled_width), std::max(1, scaled_height));
 
-            unsigned long opacity_value = (unsigned long)(current_opacity * 0xFFFFFFFF);
-            XChangeProperty(base.display, window, base.net_wm_window_opacity, XA_CARDINAL, 32,
-                           PropModeReplace, (unsigned char*)&opacity_value, 1);
+            if (base.anim_manager->opacity_enabled) {
+                float current_opacity = start_opacity - (start_opacity - target_opacity) * eased;
+                unsigned long opacity_value = (unsigned long)(current_opacity * 0xFFFFFFFF);
+                XChangeProperty(base.display, window, base.net_wm_window_opacity, XA_CARDINAL, 32,
+                               PropModeReplace, (unsigned char*)&opacity_value, 1);
+            }
             break;
         }
         case AnimationManager::SLIDE_TO_TOP:
         case AnimationManager::SLIDE_TO_BOTTOM:
         case AnimationManager::SLIDE_TO_LEFT:
         case AnimationManager::SLIDE_TO_RIGHT: {
-            float current_opacity = start_opacity - (start_opacity - target_opacity) * eased;
-            unsigned long opacity_value = (unsigned long)(current_opacity * 0xFFFFFFFF);
-            XChangeProperty(base.display, window, base.net_wm_window_opacity, XA_CARDINAL, 32,
-                           PropModeReplace, (unsigned char*)&opacity_value, 1);
+            if (base.anim_manager->opacity_enabled) {
+                float current_opacity = start_opacity - (start_opacity - target_opacity) * eased;
+                unsigned long opacity_value = (unsigned long)(current_opacity * 0xFFFFFFFF);
+                XChangeProperty(base.display, window, base.net_wm_window_opacity, XA_CARDINAL, 32,
+                               PropModeReplace, (unsigned char*)&opacity_value, 1);
+            }
             break;
         }
     }
@@ -583,9 +594,11 @@ void nwm::animate_window_resize(Base &base, Window window, int target_width, int
 void nwm::animate_window_opacity(Base &base, Window window, float target_opacity) {
     if (!base.anim_manager || !base.anim_manager->animations_enabled ||
         !base.anim_manager->opacity_enabled) {
-        unsigned long opacity_value = (unsigned long)(target_opacity * 0xFFFFFFFF);
-        XChangeProperty(base.display, window, base.net_wm_window_opacity, XA_CARDINAL, 32,
-                       PropModeReplace, (unsigned char*)&opacity_value, 1);
+        if (target_opacity >= 1.0f) {
+            unsigned long opacity_value = (unsigned long)(target_opacity * 0xFFFFFFFF);
+            XChangeProperty(base.display, window, base.net_wm_window_opacity, XA_CARDINAL, 32,
+                           PropModeReplace, (unsigned char*)&opacity_value, 1);
+        }
         return;
     }
 
@@ -685,7 +698,7 @@ void nwm::animate_window_open(Base &base, Window window) {
 
     switch (base.anim_manager->window_open_style) {
         case AnimationManager::FADE:
-            anim->start_opacity = 0.0f;
+            anim->start_opacity = base.anim_manager->opacity_enabled ? 0.0f : 1.0f;
             anim->target_opacity = 1.0f;
             anim->start_scale = 1.0f;
             anim->target_scale = 1.0f;
@@ -693,13 +706,13 @@ void nwm::animate_window_open(Base &base, Window window) {
         case AnimationManager::SCALE:
             anim->start_scale = 0.8f;
             anim->target_scale = 1.0f;
-            anim->start_opacity = 0.0f;
+            anim->start_opacity = base.anim_manager->opacity_enabled ? 0.0f : 1.0f;
             anim->target_opacity = 1.0f;
             break;
         default:
             anim->start_scale = 1.0f;
             anim->target_scale = 1.0f;
-            anim->start_opacity = 0.0f;
+            anim->start_opacity = base.anim_manager->opacity_enabled ? 0.0f : 1.0f;
             anim->target_opacity = 1.0f;
             break;
     }
@@ -739,7 +752,7 @@ void nwm::animate_window_close(Base &base, Window window, std::function<void()> 
     switch (base.anim_manager->window_close_style) {
         case AnimationManager::FADE_OUT:
             anim->start_opacity = 1.0f;
-            anim->target_opacity = 0.0f;
+            anim->target_opacity = base.anim_manager->opacity_enabled ? 0.0f : 1.0f;
             anim->start_scale = 1.0f;
             anim->target_scale = 1.0f;
             break;
@@ -747,13 +760,13 @@ void nwm::animate_window_close(Base &base, Window window, std::function<void()> 
             anim->start_scale = 1.0f;
             anim->target_scale = 0.8f;
             anim->start_opacity = 1.0f;
-            anim->target_opacity = 0.0f;
+            anim->target_opacity = base.anim_manager->opacity_enabled ? 0.0f : 1.0f;
             break;
         default:
             anim->start_scale = 1.0f;
             anim->target_scale = 1.0f;
             anim->start_opacity = 1.0f;
-            anim->target_opacity = 0.0f;
+            anim->target_opacity = base.anim_manager->opacity_enabled ? 0.0f : 1.0f;
             break;
     }
 
